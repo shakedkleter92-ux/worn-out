@@ -76,5 +76,7 @@ export const ROUTES = [
   }
 ]
 
+// BASE_URL is '/' in dev and '/worn-out/' on GitHub Pages, so media
+// resolves correctly in both environments.
 export const mediaUrl = (folder, ...parts) =>
-  `/media/${folder}/${parts.join('/')}`
+  `${import.meta.env.BASE_URL}media/${folder}/${parts.join('/')}`
