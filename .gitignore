@@ -1,0 +1,12 @@
+# dependencies / build
+node_modules
+dist
+*.log
+
+# os
+.DS_Store
+
+# original (uncompressed) videos — too large for GitHub (hundreds of MB
+# to >1GB each). The web-optimized *_web.mp4 versions live in public/media
+# and ARE committed.
+video_originals
