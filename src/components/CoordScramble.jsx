@@ -18,9 +18,10 @@ export default function CoordScramble({
   delay = 0,
   frozen = false,
   leaving = false,
-  speed = 28
+  speed = 52
 }) {
   const [display, setDisplay] = useState('')
+  const [locked, setLocked] = useState(999) // chars >= locked are "changing" (red)
   const [phase, setPhase] = useState('idle') // idle | enter | live | leave
   const [begun, setBegun] = useState(delay === 0)
   const timers = useRef([])
@@ -76,6 +77,7 @@ export default function CoordScramble({
     if (frozen) {
       clearTimers()
       setDisplay(text)
+      setLocked(999)
       return
     }
     const runScramble = () => {
@@ -91,16 +93,18 @@ export default function CoordScramble({
           else out += DIGITS[(Math.random() * 10) | 0]
         }
         setDisplay(out)
+        setLocked(step)
         if (step >= steps) {
           clearInterval(iv)
           setDisplay(text)
-          const next = setTimeout(runScramble, 120 + Math.random() * 650)
+          setLocked(999)
+          const next = setTimeout(runScramble, 500 + Math.random() * 1400)
           timers.current.push(next)
         }
-      }, 35)
+      }, 60)
       timers.current.push(iv)
     }
-    const first = setTimeout(runScramble, Math.random() * 1000)
+    const first = setTimeout(runScramble, Math.random() * 2200)
     timers.current.push(first)
     return clearTimers
   }, [phase, frozen, text])
@@ -114,5 +118,18 @@ export default function CoordScramble({
     return () => clearInterval(id)
   }, [phase, speed])
 
-  return <span>{display}</span>
+  return (
+    <span>
+      {Array.from(display).map((ch, k) => (
+        <span
+          key={k}
+          style={{
+            color: k >= locked && isDigit(ch) ? 'var(--accent)' : 'var(--ink)'
+          }}
+        >
+          {ch}
+        </span>
+      ))}
+    </span>
+  )
 }

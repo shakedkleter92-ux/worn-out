@@ -16,7 +16,7 @@ export const ROUTES = [
     coordinates: '32.82367564280882, 34.98950380754791',
     folder: 'R1HTS_HOME_SCHOOL',
     cells: 25,
-    hasVideo: false
+    hasVideo: true
   },
   {
     id: 'R2HTG',
@@ -56,7 +56,7 @@ export const ROUTES = [
     coordinates: '32.80022585436056, 34.984727681911025',
     folder: 'R6HTS_HOME_SHIRAN',
     cells: 24,
-    hasVideo: false
+    hasVideo: true
   },
   {
     id: 'R7HTE',
@@ -80,3 +80,7 @@ export const ROUTES = [
 // resolves correctly in both environments.
 export const mediaUrl = (folder, ...parts) =>
   `${import.meta.env.BASE_URL}media/${folder}/${parts.join('/')}`
+
+// display label only (internal ids stay dash-less for video / path lookups):
+// R1HTS -> R1-HTS, R8HTB -> R8-HTB
+export const routeLabel = (id) => id.replace(/^(R\d+)/, '$1-')

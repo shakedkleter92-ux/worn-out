@@ -50,9 +50,37 @@ body {
   width: 100%;
 }
 
-/* Desktop-only project: hide scrollbars but keep scroll. */
+/* Desktop-only project: hide scrollbars but keep scroll. Hiding them also
+   keeps scrollable content full-width, so fixed elements and centred
+   columns share the exact same centre line. */
 body {
   overflow-x: hidden;
+}
+* {
+  scrollbar-width: none; /* Firefox */
+}
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none; /* Chrome / Safari */
+}
+
+/* custom cursor: hide the OS cursor everywhere (a black square follows) */
+* {
+  cursor: none !important;
+}
+
+/* the cursor square gently pulses its size, forever */
+@keyframes wo-cursor {
+  0%,
+  100% {
+    width: 7px;
+    height: 7px;
+  }
+  50% {
+    width: 11px;
+    height: 11px;
+  }
 }
 
 ::selection {
@@ -77,6 +105,34 @@ button {
   50.01%,
   100% {
     opacity: 0;
+  }
+}
+
+/* continuous colour switch red <-> black, no fade (use with steps(1)) */
+@keyframes wo-redblack {
+  0%,
+  45% {
+    background-color: var(--accent);
+  }
+  50%,
+  95% {
+    background-color: var(--ink);
+  }
+  100% {
+    background-color: var(--accent);
+  }
+}
+@keyframes wo-redblack-fg {
+  0%,
+  45% {
+    color: var(--accent);
+  }
+  50%,
+  95% {
+    color: var(--ink);
+  }
+  100% {
+    color: var(--accent);
   }
 }
 

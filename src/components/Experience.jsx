@@ -1,11 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import Typewriter from './Typewriter.jsx'
+import LinesReveal, { linesRevealMs } from './LinesReveal.jsx'
 import CoordScramble from './CoordScramble.jsx'
 import { similarityPath, toPolyPoints } from '../lib/geometry.js'
+import { randomPulse } from '../lib/blink.js'
 import { ROUTE_PATHS } from '../data/routePaths.js'
-import { HOME, ROUTES } from '../data/routes.js'
+import { HOME, ROUTES, routeLabel } from '../data/routes.js'
 import { H1_POS, MAP_NODES, SQUARE_SIZE } from '../data/mapLayout.js'
+import { useSetHint } from './HintContext.jsx'
 
 /* ==================================================================
    ONE CONTINUOUS SPACE.
@@ -25,27 +28,45 @@ const MAP_Y0 = FRAME_H // map frame starts here
 
 // ---- home (screen 1) ----
 const HOME_SQ = { cx: 1000, cy: 562, size: 20 }
-const HLINE = { xFrom: HOME_SQ.cx - HOME_SQ.size / 2, xTo: 772, y: HOME_SQ.cy }
-const LABEL = { leftX: 772, size: 18 }
+// WORN OUT + line + paragraph start here on the left
+const INTRO_LEFT = 605
+const HLINE = { xFrom: HOME_SQ.cx - HOME_SQ.size / 2, xTo: INTRO_LEFT, y: HOME_SQ.cy }
+const LABEL = { leftX: INTRO_LEFT, size: 18 }
 
 // ---- map (screen 2) in global space ----
 const H1G = { x: H1_POS.x, y: H1_POS.y + MAP_Y0 }
 const CENTRAL = { x: 1000, y1: HOME_SQ.cy + HOME_SQ.size / 2, y2: H1G.y }
 
-const DRAW_H = 0.55 // horizontal intro line
-const DRAW_V = 1.7 // central vertical line build
-const DRAW = 1.6 // roads draw out (all the same, per spec)
-const UI_EXIT = 850 // ms for labels/squares to erase before lines retract
+/* --- timing --- slow, patient, cinematic (Revision 01).
+   Everything unfolds gradually; each stage has room to breathe. */
+const DRAW_H = 1.4 // horizontal intro line
+const DRAW_V = 4.2 // central vertical line build (long + slow)
+const DRAW = 3.4 // roads draw out (all the same, per spec)
+const UI_EXIT = 1700 // ms for labels/squares to erase before lines retract
 const NAME_SIZE = 17
 const COORD_SIZE = 11
-const CAM = 1.15 // s camera travel
+const CAM = 2.6 // s camera travel
+const PAUSE_HV = 600 // ms pause between the two intro lines
+const PAUSE_READY = 700 // ms pause before H1 appears
+const PAUSE_ROUTES = 900 // ms pause after roads draw, before labels appear
+
+const INTRO_TEXT =
+  'Erosion maps recurring routes of everyday relief through the worn ' +
+  'textures they leave behind. By documenting material transformed ' +
+  'through repeated movement, the interface reveals how human routines ' +
+  'become embedded in the built environment over time.'
+
+// paragraph reveal options (shared by the component + close timing)
+const PARA_OPTS = { speed: 70, maxChars: 40 }
+const PARA_MS = linesRevealMs(INTRO_TEXT, PARA_OPTS)
 
 const routeById = Object.fromEntries(ROUTES.map((r) => [r.id, r]))
 
 // dev shortcut: ?dev=map opens straight into the revealed map
 const DEV = new URLSearchParams(window.location.search).get('dev')
 
-export default function Experience({ onSelectRoute, onOpenAll, paused = false }) {
+export default function Experience({ onSelectRoute, onOpenAll, onViewChange, resumeMap = 0, paused = false }) {
+  const setHint = useSetHint() // cursor cue text while hovering a map button
   // viewport-width scale (vertical scroll space)
   const [scale, setScale] = useState(1)
   useLayoutEffect(() => {
@@ -56,8 +77,10 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
   }, [])
 
   // intro build: idle -> h -> v -> ready
-  const [phase, setPhase] = useState(DEV === 'map' ? 'ready' : 'idle')
+  const [phase, setPhase] = useState(DEV === 'map' || DEV === 'intro' ? 'ready' : 'idle')
   const [homeHover, setHomeHover] = useState(false)
+  const homePulse = useRef(randomPulse())
+  const h1Pulse = useRef(randomPulse())
   // camera
   const [view, setView] = useState(DEV === 'map' ? 'map' : 'home') // home | map
   // roads
@@ -81,27 +104,22 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
           gy,
           route: routeById[n.id],
           poly: toPolyPoints(pts),
-          blinkDur: 0.9 + Math.random() * 0.8,
-          blinkDelay: -(Math.random() * 1.6),
-          closeDur: 0.7 + Math.random() * 0.9 // random retract speed
+          blink: randomPulse(),
+          closeDur: 1.4 + Math.random() * 1.4 // random (slow) retract speed
         }
       }),
     []
   )
   const maxClose = useMemo(() => Math.max(...nodes.map((n) => n.closeDur)), [nodes])
 
-  // -------- intro build --------
-  const onHomeClick = () => {
-    if (phase === 'idle') setPhase('h')
-  }
-
   // -------- open / close roads --------
   const openRoads = () => {
     if (roads !== 'closed') return
     setRoads('opening')
+    // roads finish drawing -> pause so the user can take them in -> labels
     setTimeout(() => {
       setRoads('open')
-      setRoutesUI(true)
+      setTimeout(() => setRoutesUI(true), PAUSE_ROUTES)
     }, DRAW * 1000)
   }
 
@@ -119,23 +137,43 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
     }, UI_EXIT + maxClose * 1000 + 60)
   }
 
-  // -------- wheel navigation: scroll controls open/close --------
+  // -------- wheel navigation --------
+  // scroll direction: forward = deeper into the archive, back = retreat.
   useEffect(() => {
     const onWheel = (e) => {
-      if (lock.current || phase !== 'ready' || paused) return
-      const down = e.deltaY > 0
-      const up = e.deltaY < 0
-      if (down && view === 'home') {
-        // travel down to H1, then the roads open with the scroll
+      if (lock.current || paused) return
+      const forward = e.deltaY > 0
+      const back = e.deltaY < 0
+
+      // -- intro (first square) opens forward, reverses back --
+      if (phase === 'idle') {
+        if (forward) setPhase('h') // build the intro
+        return
+      }
+      if (phase !== 'ready') return // build/reverse in progress -> ignore
+      if (back && view === 'home') {
+        // reverse the intro back to just the centre square. Wait long
+        // enough for the paragraph to fully erase (mirror of the reveal).
+        lock.current = true
+        setPhase('closing')
+        setTimeout(() => {
+          setPhase('idle')
+          lock.current = false
+        }, PARA_MS + 200)
+        return
+      }
+
+      if (forward && view === 'home') {
+        // travel to H1, then the roads open
         lock.current = true
         setView('map')
         setTimeout(() => {
           openRoads()
           lock.current = false
         }, CAM * 1000)
-      } else if (up && view === 'map') {
+      } else if (back && view === 'map') {
         if (roads === 'open' || roads === 'opening') {
-          // roads close first, THEN travel up
+          // roads close first, THEN travel back
           lock.current = true
           closeRoads(() => {
             setView('home')
@@ -150,13 +188,39 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
     }
     window.addEventListener('wheel', onWheel, { passive: true })
     return () => window.removeEventListener('wheel', onWheel)
-  }, [phase, view, roads, maxClose, paused])
+  }, [phase, view, roads, maxClose, paused, onOpenAll])
+
+  // report the current section (home vs map) to the parent
+  useEffect(() => {
+    onViewChange?.(view)
+  }, [view, onViewChange])
+
+  // returning from a route / all-routes overlay: snap the map back to
+  // section 2 with the roads already open (never to the home screen), and
+  // briefly lock the wheel so trackpad momentum can't navigate it away
+  const firstResume = useRef(true)
+  useEffect(() => {
+    if (firstResume.current) {
+      firstResume.current = false
+      return
+    }
+    setView('map')
+    setPhase('ready')
+    setRoads('open')
+    setRoutesUI(true)
+    lock.current = true
+    const t = setTimeout(() => {
+      lock.current = false
+    }, 650)
+    return () => clearTimeout(t)
+  }, [resumeMap])
 
   const cameraY = view === 'map' ? FRAME_H : 0
+  const introClosing = phase === 'closing' // intro reversing back to the bare square
   const showRoads = roads === 'opening' || roads === 'open' || roads === 'closing'
   const showHLine = phase !== 'idle'
-  const showVLine = phase === 'v' || phase === 'ready'
-  const showLabel = phase === 'v' || phase === 'ready'
+  const showVLine = phase === 'v' || phase === 'ready' || introClosing
+  const showLabel = phase === 'v' || phase === 'ready' || introClosing
   const showH1 = phase === 'ready'
   const roadsOpenUI = roads === 'open' || roads === 'closing'
 
@@ -199,9 +263,11 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
               strokeWidth="1"
               vectorEffect="non-scaling-stroke"
               initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: DRAW_H, ease: 'easeInOut' }}
-              onAnimationComplete={() => setPhase((p) => (p === 'h' ? 'v' : p))}
+              animate={{ pathLength: introClosing ? 0 : 1 }}
+              transition={{ duration: introClosing ? 0.9 : DRAW_H, ease: 'easeInOut' }}
+              onAnimationComplete={() =>
+                setTimeout(() => setPhase((p) => (p === 'h' ? 'v' : p)), PAUSE_HV)
+              }
             />
           )}
           {/* central vertical line — builds down to H1, then stays forever */}
@@ -215,9 +281,11 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
               strokeWidth="1"
               vectorEffect="non-scaling-stroke"
               initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: DRAW_V, ease: 'easeInOut' }}
-              onAnimationComplete={() => setPhase((p) => (p === 'v' ? 'ready' : p))}
+              animate={{ pathLength: introClosing ? 0 : 1 }}
+              transition={{ duration: introClosing ? 1.6 : DRAW_V, ease: 'easeInOut' }}
+              onAnimationComplete={() =>
+                setTimeout(() => setPhase((p) => (p === 'v' ? 'ready' : p)), PAUSE_READY)
+              }
             />
           )}
           {/* roads — draw out on open, un-stroke on close (staggered) */}
@@ -253,27 +321,41 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
               letterSpacing: '0.02em'
             }}
           >
-            <Typewriter text="WORN OUT" speed={55} />
+            <Typewriter text="WORN OUT" speed={115} leaving={introClosing} />
+          </div>
+        )}
+
+        {/* ---- introductory paragraph — appears with WORN OUT, just below
+             the line, aligned under WORN OUT (first page) ---- */}
+        {showLabel && (
+          <div
+            style={{
+              position: 'absolute',
+              left: LABEL.leftX,
+              // stay clear of the vertical line at x=1000
+              top: HLINE.y + 24,
+              width: 1000 - LABEL.leftX - 18,
+              letterSpacing: '0.02em',
+              opacity: 0.6
+            }}
+          >
+            <LinesReveal text={INTRO_TEXT} {...PARA_OPTS} leaving={introClosing} />
           </div>
         )}
 
         {/* ---------------- home square (stays put) ---------------- */}
         <div
-          onClick={onHomeClick}
           onMouseEnter={() => setHomeHover(true)}
           onMouseLeave={() => setHomeHover(false)}
+          onClick={() => phase === 'idle' && setPhase('h')}
           style={{
             position: 'absolute',
             left: HOME_SQ.cx - HOME_SQ.size / 2,
             top: HOME_SQ.cy - HOME_SQ.size / 2,
             width: HOME_SQ.size,
             height: HOME_SQ.size,
-            background: 'var(--ink)',
-            cursor: phase === 'idle' ? 'pointer' : 'default',
-            animation:
-              phase === 'idle' && !homeHover
-                ? 'wo-blink 1.1s steps(1) infinite'
-                : 'none'
+            background: homeHover ? 'var(--accent)' : undefined,
+            animation: homeHover ? 'none' : homePulse.current
           }}
         />
 
@@ -298,7 +380,7 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
               <CoordScramble text={HOME.coordinates} frozen={h1Hover} leaving={uiLeaving} />
             </span>
             <span style={{ fontSize: NAME_SIZE }}>
-              <Typewriter text="H1" speed={60} delay={300} leaving={uiLeaving} />
+              <Typewriter text="H1" speed={130} delay={600} leaving={uiLeaving} />
             </span>
           </div>
         )}
@@ -306,12 +388,18 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
         {/* ---------------- H1 square (its own square, stays) ---------------- */}
         {showH1 && (
           <motion.div
-            onMouseEnter={() => setH1Hover(true)}
-            onMouseLeave={() => setH1Hover(false)}
+            onMouseEnter={() => {
+              setH1Hover(true)
+              setHint('ALL ROUTES')
+            }}
+            onMouseLeave={() => {
+              setH1Hover(false)
+              setHint(null)
+            }}
             onClick={() => roads === 'open' && onOpenAll?.()}
             initial={{ opacity: 0, scale: 0.4 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
+            transition={{ duration: 1.2, ease: 'easeOut' }}
             style={{
               position: 'absolute',
               left: H1G.x - SQUARE_SIZE / 2,
@@ -320,12 +408,9 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
               height: SQUARE_SIZE,
               // same hover behaviour as the route squares (future: opens
               // the all-routes screen). Hover -> accent colour + no blink.
-              background: h1Hover ? 'var(--accent)' : 'var(--ink)',
+              background: h1Hover ? 'var(--accent)' : undefined,
               cursor: 'pointer',
-              animation:
-                roads === 'closed' && !h1Hover
-                  ? 'wo-blink 1.1s steps(1) infinite'
-                  : 'none'
+              animation: h1Hover ? 'none' : h1Pulse.current
             }}
           />
         )}
@@ -352,7 +437,7 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
             }
             const name = (
               <span style={{ fontSize: NAME_SIZE }}>
-                <Typewriter text={n.id} speed={45} leaving={uiLeaving} />
+                <Typewriter text={routeLabel(n.id)} speed={95} leaving={uiLeaving} />
               </span>
             )
             const coords = (
@@ -362,7 +447,19 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
             )
             return (
               <div key={n.id}>
-                <div style={labelStyle}>
+                <div
+                  style={{ ...labelStyle, cursor: 'pointer' }}
+                  onMouseEnter={() => {
+                    if (uiLeaving) return
+                    setHovered(n.id)
+                    setHint('ENTER ROUTE')
+                  }}
+                  onMouseLeave={() => {
+                    setHovered(null)
+                    setHint(null)
+                  }}
+                  onClick={() => roads === 'open' && !uiLeaving && onSelectRoute?.(n.id)}
+                >
                   {left ? (
                     <>
                       {coords}
@@ -382,7 +479,7 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
                     opacity: uiLeaving ? 0 : 1,
                     scale: uiLeaving ? 0.4 : 1
                   }}
-                  transition={{ duration: 0.45, ease: 'easeInOut' }}
+                  transition={{ duration: 1.1, ease: 'easeInOut' }}
                   style={{
                     position: 'absolute',
                     left: n.gx - SQUARE_SIZE / 2,
@@ -392,24 +489,29 @@ export default function Experience({ onSelectRoute, onOpenAll, paused = false })
                   }}
                 >
                   <motion.div
-                    onMouseEnter={() => !uiLeaving && setHovered(n.id)}
-                    onMouseLeave={() => setHovered(null)}
+                    onMouseEnter={() => {
+                      if (uiLeaving) return
+                      setHovered(n.id)
+                      setHint('ENTER ROUTE')
+                    }}
+                    onMouseLeave={() => {
+                      setHovered(null)
+                      setHint(null)
+                    }}
                     onClick={() => roads === 'open' && !uiLeaving && onSelectRoute?.(n.id)}
                     style={{
                       width: '100%',
                       height: '100%',
-                      background: isHover ? 'var(--accent)' : 'var(--ink)',
+                      background: isHover ? 'var(--accent)' : undefined,
                       cursor: 'pointer',
-                      animation:
-                        isHover || uiLeaving
-                          ? 'none'
-                          : `wo-blink ${n.blinkDur}s steps(1) ${n.blinkDelay}s infinite`
+                      animation: isHover || uiLeaving ? 'none' : n.blink
                     }}
                   />
                 </motion.div>
               </div>
             )
           })}
+
       </div>
     </div>
   )
