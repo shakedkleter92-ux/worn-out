@@ -150,3 +150,19 @@ button {
     opacity: 1;
   }
 }
+
+/* mapping square shimmer — each rect twinkles briefly out and back (driven
+   entirely by CSS, with random per-square duration/delay, so it costs no JS) */
+@keyframes wo-mapshimmer {
+  0%,
+  58% {
+    opacity: 1;
+  }
+  74% {
+    opacity: 0;
+  }
+  90%,
+  100% {
+    opacity: 1;
+  }
+}
