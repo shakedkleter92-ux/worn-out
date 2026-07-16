@@ -52,9 +52,9 @@ const PAUSE_ROUTES = 900 // ms pause after roads draw, before labels appear
 
 const INTRO_TEXT =
   'Erosion maps recurring routes of everyday relief through the worn ' +
-  'textures they leave behind. By documenting material that is being ' +
-  'transformed, the interface reveals how human routines become embedded ' +
-  'in the environment over time.'
+  'textures they leave behind. By documenting material that being ' +
+  'transformed by repeated movement, the interface reveals how human ' +
+  'routines become embedded in the environment over time.'
 
 // paragraph reveal options (shared by the component + close timing)
 const PARA_OPTS = { speed: 70, maxChars: 40 }
