@@ -47,7 +47,7 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
   const counted = useRef(false)
   const activeRef = useRef(false)
   const retryT = useRef(null)
-  const [bg, setBg] = useState(true)
+  const [bg, setBg] = useState(false) // off-screen cells load NOTHING (default no image)
 
   const seen = useInView(hostRef, { amount: 0.01 })
   const [hovering, setHovering] = useState(false)
@@ -93,6 +93,7 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
   const inlineShimmer = async () => {
     if (activeRef.current) return
     if (activeCount >= MAX_ACTIVE) {
+      setBg(true) // show the static mapping image while waiting for a shimmer slot
       clearRetry()
       retryT.current = setTimeout(() => {
         retryT.current = null
@@ -137,7 +138,7 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
     const host = hostRef.current
     if (host) host.innerHTML = ''
     rects.current = []
-    setBg(true)
+    setBg(false) // off-screen → paint nothing (don't keep a heavy SVG image around)
   }
 
   // decide the cell's state — but never touch the DOM mid-gesture
@@ -150,6 +151,8 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
       else shimmerOn()
     } else if (activeRef.current) {
       hardStop()
+    } else {
+      setBg(false) // off-screen and idle → no image
     }
   }
 
