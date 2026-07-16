@@ -151,6 +151,13 @@ button {
   }
 }
 
+/* while the all-routes window is being panned/zoomed, freeze every shimmer
+   animation — animating content inside a transforming layer re-rasterises
+   every frame and crashes the tab */
+body.wo-panning svg rect {
+  animation-play-state: paused !important;
+}
+
 /* mapping square shimmer — each rect twinkles briefly out and back (driven
    entirely by CSS, with random per-square duration/delay, so it costs no JS) */
 @keyframes wo-mapshimmer {

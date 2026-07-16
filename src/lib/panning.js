@@ -10,6 +10,10 @@ export const isPanning = () => panning
 export const setPanning = (v) => {
   if (panning === v) return
   panning = v
+  // pause every shimmer animation while the canvas is moving — animating
+  // content inside a transforming layer forces per-frame re-rasterisation
+  // (GPU thrash) and crashes the tab
+  if (typeof document !== 'undefined') document.body.classList.toggle('wo-panning', v)
   if (!v) for (const fn of listeners) fn()
 }
 
