@@ -33,6 +33,7 @@ export const FORCE_REVEAL = new URLSearchParams(window.location.search).get('all
 function Layer({ src, on, z, anchorRef }) {
   const [shown, setShown] = useState(on)
   useEffect(() => {
+    if (on === shown) return // nothing to reveal/hide — skip the layout measure
     // how many cells away from the viewport centre this cell sits right now
     let steps = 0
     const el = anchorRef?.current
@@ -46,7 +47,7 @@ function Layer({ src, on, z, anchorRef }) {
     }
     const t = setTimeout(() => setShown(on), steps * TOGGLE_STAGGER)
     return () => clearTimeout(t)
-  }, [on, anchorRef])
+  }, [on, shown, anchorRef])
   if (!shown) return null
   return (
     <img

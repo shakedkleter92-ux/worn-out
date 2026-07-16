@@ -31,7 +31,7 @@ function loadSvg(url) {
 const FADE = 0.4 // s — squares ease back to full when settling
 const SHIMMER_MIN = 1.5 // s — random per-square animation duration
 const SHIMMER_MAX = 4.0
-const MAX_ACTIVE = 24 // cap simultaneously inlined (shimmering) mappings
+const MAX_ACTIVE = 16 // cap simultaneously inlined (shimmering) mappings
 const RETRY_MS = 400 // blocked-by-cap cells retry this often
 
 let activeCount = 0
@@ -178,7 +178,10 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
         ...LAYER,
         zIndex: z,
         display: on ? 'block' : 'none',
-        backgroundImage: bg ? `url("${src}")` : 'none',
+        // only paint the (heavy) mapping SVG for cells actually on screen —
+        // in the all-routes window off-screen cells would otherwise all
+        // rasterise into one giant transformed layer and crash the tab
+        backgroundImage: bg && (seen || !autoShimmer) ? `url("${src}")` : 'none',
         backgroundSize: 'cover',
         backgroundRepeat: 'no-repeat'
       }}
