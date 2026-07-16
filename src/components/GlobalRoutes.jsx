@@ -8,6 +8,7 @@ import StripColumn from './StripLayers.jsx'
 import Typewriter from './Typewriter.jsx'
 import { loadFragments } from '../lib/fragments.js'
 import { randomPulse } from '../lib/blink.js'
+import { setPanning } from '../lib/panning.js'
 
 /* ==================================================================
    GLOBAL ALL-ROUTES SCREEN  (press H1)
@@ -127,8 +128,12 @@ export default function GlobalRoutes({ onBack }) {
   useEffect(() => {
     const el = frameRef.current
     if (!el) return
+    let settleTimer = null
     const onWheel = (e) => {
       e.preventDefault()
+      setPanning(true) // freeze the shimmer while zooming
+      clearTimeout(settleTimer)
+      settleTimer = setTimeout(() => setPanning(false), 260)
       const rect = el.getBoundingClientRect()
       const cx = e.clientX - rect.left
       const cy = e.clientY - rect.top
@@ -140,7 +145,10 @@ export default function GlobalRoutes({ onBack }) {
       })
     }
     el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      clearTimeout(settleTimer)
+    }
   }, [clamp])
 
   // ---- drag = pan ----
@@ -148,14 +156,19 @@ export default function GlobalRoutes({ onBack }) {
     drag.current = { mx: e.clientX, my: e.clientY, x: t.x, y: t.y }
     setDragging(true)
     setAnimating(false) // dragging is instant, never eased
+    setPanning(true) // freeze the shimmer while dragging
   }
 
   // ---- arrow buttons = glide the view one step (left / right / down) ----
   const panBy = (dx, dy) => {
     setAnimating(true)
+    setPanning(true) // freeze the shimmer during the glide
     setT((s) => clamp({ ...s, x: s.x + dx, y: s.y + dy }))
     if (animRef.current) clearTimeout(animRef.current)
-    animRef.current = setTimeout(() => setAnimating(false), 430)
+    animRef.current = setTimeout(() => {
+      setAnimating(false)
+      setPanning(false)
+    }, 460)
   }
   useEffect(() => {
     const move = (e) => {
@@ -165,6 +178,7 @@ export default function GlobalRoutes({ onBack }) {
       setT((s) => clamp({ ...s, x: drag.current.x + dx, y: drag.current.y + dy }))
     }
     const up = () => {
+      if (drag.current) setPanning(false) // drag ended → let the shimmer resettle
       drag.current = null
       setDragging(false)
     }

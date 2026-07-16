@@ -29,7 +29,7 @@ const MAP_Y0 = FRAME_H // map frame starts here
 // ---- home (screen 1) ----
 const HOME_SQ = { cx: 1000, cy: 562, size: 20 }
 // WORN OUT + line + paragraph start here on the left
-const INTRO_LEFT = 605
+const INTRO_LEFT = 440
 const HLINE = { xFrom: HOME_SQ.cx - HOME_SQ.size / 2, xTo: INTRO_LEFT, y: HOME_SQ.cy }
 const LABEL = { leftX: INTRO_LEFT, size: 18 }
 
@@ -57,7 +57,7 @@ const INTRO_TEXT =
   'routines become embedded in the environment over time.'
 
 // paragraph reveal options (shared by the component + close timing)
-const PARA_OPTS = { speed: 70, maxChars: 40 }
+const PARA_OPTS = { speed: 70, maxChars: 54 }
 const PARA_MS = linesRevealMs(INTRO_TEXT, PARA_OPTS)
 
 const routeById = Object.fromEntries(ROUTES.map((r) => [r.id, r]))

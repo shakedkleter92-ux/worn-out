@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { useInView } from 'framer-motion'
+import { isPanning, onPanEnd } from '../lib/panning.js'
 
 /* ==================================================================
    MAPPING LAYER — always visible; its square modules shimmer.
    The mapping is shown at all times (a light background image). While a
-   cell is on screen, its individual squares twinkle on and off — driven
-   entirely by a CSS animation (wo-mapshimmer) with a random per-square
-   duration/delay, so there are NO JavaScript timers running per cell (the
-   old timer-per-square approach overloaded the page on the all-routes
-   window). Hovering a cell eases its squares back to full and holds them
-   there; the shimmer resumes when the cursor leaves.
+   cell is on screen its squares twinkle via a CSS animation (wo-mapshimmer)
+   with random per-square timing — no JS timers per cell.
 
-   Kept light: the SVG is only inlined for cells actually on screen, capped
-   at MAX_ACTIVE at once; off-screen cells are just a background image.
+   Crucially, the shimmer is only (un)inlined when the view is STILL. While
+   the all-routes window is being panned/zoomed, cells racing across the
+   edge would otherwise inline/tear-down a 246-rect SVG many times a second
+   and crash the tab, so reconciliation is frozen during the gesture and
+   runs once when it settles (see ../lib/panning.js).
+
+   Only cells on screen shimmer, capped at MAX_ACTIVE at once.
 ================================================================== */
 
 const textCache = new Map()
@@ -29,10 +31,11 @@ function loadSvg(url) {
 }
 
 const FADE = 0.4 // s — squares ease back to full when settling
-const SHIMMER_MIN = 1.5 // s — random per-square animation duration
-const SHIMMER_MAX = 4.0
+const SHIMMER_MIN = 1.6 // s — random per-square animation duration
+const SHIMMER_MAX = 4.2
+const SHIMMER_FRACTION = 0.5 // only animate this share of squares (lighter paint)
 const MAX_ACTIVE = 16 // cap simultaneously inlined (shimmering) mappings
-const RETRY_MS = 400 // blocked-by-cap cells retry this often
+const RETRY_MS = 450
 
 let activeCount = 0
 
@@ -43,12 +46,19 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
   const rects = useRef([])
   const counted = useRef(false)
   const activeRef = useRef(false)
-  const wantRef = useRef(false)
   const retryT = useRef(null)
-  const [bg, setBg] = useState(true) // show the plain background image
+  const [bg, setBg] = useState(true)
 
   const seen = useInView(hostRef, { amount: 0.01 })
   const [hovering, setHovering] = useState(false)
+
+  // live mirrors so the pan-end reconcile reads current values
+  const seenRef = useRef(seen)
+  seenRef.current = seen
+  const onRef = useRef(on)
+  onRef.current = on
+  const hoverRef = useRef(hovering)
+  hoverRef.current = hovering
 
   const release = () => {
     if (counted.current) {
@@ -62,24 +72,17 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
       retryT.current = null
     }
   }
-  const scheduleRetry = () => {
-    clearRetry()
-    retryT.current = setTimeout(() => {
-      retryT.current = null
-      if (wantRef.current) inlineShimmer()
-    }, RETRY_MS)
-  }
 
-  // start the CSS twinkle on every square (random duration + negative delay
-  // so they're all out of phase from the first frame)
   const shimmerOn = () => {
     for (const el of rects.current) {
-      const dur = SHIMMER_MIN + Math.random() * (SHIMMER_MAX - SHIMMER_MIN)
-      el.style.animation = `wo-mapshimmer ${dur.toFixed(2)}s ease-in-out ${(-Math.random() * dur).toFixed(2)}s infinite`
+      if (Math.random() < SHIMMER_FRACTION) {
+        const dur = SHIMMER_MIN + Math.random() * (SHIMMER_MAX - SHIMMER_MIN)
+        el.style.animation = `wo-mapshimmer ${dur.toFixed(2)}s ease-in-out ${(-Math.random() * dur).toFixed(2)}s infinite`
+      } else {
+        el.style.animation = 'none'
+      }
     }
   }
-  // stop the twinkle and ease every square back to full (the opacity
-  // transition makes dimmed squares fade back in rather than snap)
   const shimmerOff = () => {
     for (const el of rects.current) {
       el.style.animation = 'none'
@@ -89,17 +92,24 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
 
   const inlineShimmer = async () => {
     if (activeRef.current) return
-    if (activeCount >= MAX_ACTIVE) return scheduleRetry()
+    if (activeCount >= MAX_ACTIVE) {
+      clearRetry()
+      retryT.current = setTimeout(() => {
+        retryT.current = null
+        reconcile()
+      }, RETRY_MS)
+      return
+    }
     activeRef.current = true
     const text = await loadSvg(src)
     const host = hostRef.current
-    if (!text || !host || !on || !wantRef.current) {
+    if (!text || !host || !onRef.current || !seenRef.current || isPanning()) {
       activeRef.current = false
       return
     }
     if (activeCount >= MAX_ACTIVE) {
       activeRef.current = false
-      return scheduleRetry()
+      return
     }
     host.innerHTML = text
     const svg = host.querySelector('svg')
@@ -116,11 +126,10 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
     activeCount++
     counted.current = true
     setBg(false)
-    if (hovering) shimmerOff()
+    if (hoverRef.current) shimmerOff()
     else shimmerOn()
   }
 
-  // off-screen / layer off: drop the svg immediately (back to the image)
   const hardStop = () => {
     clearRetry()
     release()
@@ -131,20 +140,24 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
     setBg(true)
   }
 
-  // reconcile: shimmer while on screen; ease to a stop while hovered
-  useEffect(() => {
-    const visible = autoShimmer && seen && on
-    wantRef.current = visible
+  // decide the cell's state — but never touch the DOM mid-gesture
+  const reconcile = () => {
+    if (isPanning()) return
+    const visible = autoShimmer && seenRef.current && onRef.current
     if (visible) {
       if (!activeRef.current) inlineShimmer()
-      else if (hovering) shimmerOff()
+      else if (hoverRef.current) shimmerOff()
       else shimmerOn()
-    } else {
-      clearRetry()
-      if (activeRef.current) hardStop()
+    } else if (activeRef.current) {
+      hardStop()
     }
+  }
+
+  useEffect(() => {
+    reconcile()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoShimmer, seen, on, hovering])
+  useEffect(() => onPanEnd(reconcile), []) // re-evaluate once panning settles
 
   const onEnter = (e) => {
     if (e.buttons !== 0) return // panning, not hovering
@@ -155,10 +168,7 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
   }
 
   useEffect(() => {
-    if (!on) {
-      wantRef.current = false
-      hardStop()
-    }
+    if (!on) hardStop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on])
   useEffect(
@@ -178,10 +188,7 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
         ...LAYER,
         zIndex: z,
         display: on ? 'block' : 'none',
-        // only paint the (heavy) mapping SVG for cells actually on screen —
-        // in the all-routes window off-screen cells would otherwise all
-        // rasterise into one giant transformed layer and crash the tab
-        backgroundImage: bg && (seen || !autoShimmer) ? `url("${src}")` : 'none',
+        backgroundImage: bg ? `url("${src}")` : 'none',
         backgroundSize: 'cover',
         backgroundRepeat: 'no-repeat'
       }}
