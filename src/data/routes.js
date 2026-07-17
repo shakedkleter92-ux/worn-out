@@ -64,7 +64,7 @@ export const ROUTES = [
     coordinates: '32.82799070315821, 35.07576995630528',
     folder: 'R7HTE_HOME_EVA',
     cells: 20,
-    hasVideo: false
+    hasVideo: true
   },
   {
     id: 'R8HTB',
