@@ -63,7 +63,7 @@ function Layer({ src, on, z, anchorRef }) {
    scroll to it), reveals its layers one at a time once eligible, and unlocks
    the next cell down only after it has fully finished. `cellStyle` sets the
    box size (fixed on a route page, fluid on the all-routes grid).          */
-const StripCell = memo(function StripCell({ folder, i, layers, onHover, canReveal, onReveal, cellStyle, instant, start = true, auto = false, shimmer = false }) {
+const StripCell = memo(function StripCell({ folder, i, layers, onHover, canReveal, onReveal, cellStyle, instant, start = true, auto = false, shimmer = false, cellDelay = CELL_DELAY, layerStagger = LAYER_STAGGER }) {
   const ref = useRef(null)
   const seen = useInView(ref, { once: true, margin: '-20% 0px' })
   const immediate = instant || FORCE_REVEAL // show every layer at once (explore view)
@@ -75,7 +75,7 @@ const StripCell = memo(function StripCell({ folder, i, layers, onHover, canRevea
   useEffect(() => {
     if (immediate || !eligible) return
     const timers = [1, 2, 3].map((n) =>
-      setTimeout(() => setLayerStep((s) => Math.max(s, n)), CELL_DELAY + (n - 1) * LAYER_STAGGER)
+      setTimeout(() => setLayerStep((s) => Math.max(s, n)), cellDelay + (n - 1) * layerStagger)
     )
     return () => timers.forEach(clearTimeout)
   }, [eligible, immediate])
@@ -107,7 +107,7 @@ const StripCell = memo(function StripCell({ folder, i, layers, onHover, canRevea
 /* a full vertical strip for one route. Owns the top-to-bottom reveal order
    (a cell may only reveal once the one above it has). Drop it in wherever a
    route's cells are shown so every page reveals and toggles the same way.  */
-export default function StripColumn({ folder, count, layers, onHover, onMouseLeave, cellStyle, wrapperStyle, instant, start = true, auto = false, shimmer = false }) {
+export default function StripColumn({ folder, count, layers, onHover, onMouseLeave, cellStyle, wrapperStyle, instant, start = true, auto = false, shimmer = false, cellDelay, layerStagger }) {
   const [revealed, setRevealed] = useState(FORCE_REVEAL || instant ? Infinity : 0)
   const advance = useCallback((idx) => setRevealed((r) => Math.max(r, idx)), [])
 
@@ -127,6 +127,8 @@ export default function StripColumn({ folder, count, layers, onHover, onMouseLea
           start={start}
           auto={auto}
           shimmer={shimmer}
+          cellDelay={cellDelay}
+          layerStagger={layerStagger}
         />
       ))}
     </div>

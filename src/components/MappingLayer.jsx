@@ -31,8 +31,11 @@ function loadSvg(url) {
 
 const SHIMMER_MIN = 1.6 // s — random per-square animation duration
 const SHIMMER_MAX = 4.2
-const SHIMMER_FRACTION = 0.5 // only animate this share of squares (lighter paint)
-const MAX_ACTIVE = 16 // cap simultaneously inlined (shimmering) mappings
+// animate fewer squares per cell (thinner) so more cells can shimmer at once
+// without raising the total number of animating rects — keeps the paint light
+// while making the shimmer look consistent across zoom levels.
+const SHIMMER_FRACTION = 0.25 // share of squares that twinkle per cell
+const MAX_ACTIVE = 36 // cap simultaneously inlined (shimmering) mappings
 const RETRY_MS = 450
 
 let activeCount = 0
@@ -78,25 +81,25 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
 
   const inlineShimmer = async () => {
     if (activeRef.current) return
+    setBg(true) // static mapping shows immediately — never blank while we load/upgrade
     if (activeCount >= MAX_ACTIVE) {
-      setBg(true) // show the static mapping while waiting for a shimmer slot
       clearRetry()
       retryT.current = setTimeout(() => {
         retryT.current = null
         reconcile()
       }, RETRY_MS)
-      return
+      return // stays static until a shimmer slot frees up
     }
     activeRef.current = true
     const text = await loadSvg(src)
     const host = hostRef.current
     if (!text || !host || !onRef.current || !seenRef.current || isPanning()) {
       activeRef.current = false
-      return
+      return // stays static (bg already on)
     }
     if (activeCount >= MAX_ACTIVE) {
       activeRef.current = false
-      return
+      return // stays static
     }
     host.innerHTML = text
     const svg = host.querySelector('svg')
@@ -108,7 +111,7 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
     rects.current = Array.from(host.querySelectorAll('rect'))
     activeCount++
     counted.current = true
-    setBg(false)
+    setBg(false) // inline now covers the cell — drop the static so the shimmer shows through
     shimmerOn()
   }
 
@@ -122,17 +125,20 @@ export default function MappingLayer({ src, on, z = 3, autoShimmer = false }) {
     setBg(false)
   }
 
-  // decide the cell's state — but never touch the DOM mid-gesture
+  // decide the cell's state — but never touch the DOM mid-gesture.
+  // In view, the static mapping is ALWAYS shown (never blank); the shimmer is
+  // an optional upgrade layered on top for a capped subset of cells.
   const reconcile = () => {
     if (isPanning()) return
-    const visible = autoShimmer && seenRef.current && onRef.current
-    if (visible) {
-      if (!activeRef.current) inlineShimmer()
-    } else if (activeRef.current) {
-      hardStop()
-    } else {
-      setBg(false)
+    const visible = seenRef.current && onRef.current
+    if (!visible) {
+      if (activeRef.current) hardStop()
+      else setBg(false)
+      return
     }
+    if (activeRef.current) return // already inlined + shimmering
+    if (autoShimmer) inlineShimmer() // shows static now, upgrades to shimmer if a slot is free
+    else setBg(true) // static only (no shimmer requested)
   }
 
   useEffect(() => {

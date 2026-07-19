@@ -64,9 +64,10 @@ export default function App() {
   }
 
   // the scroll cue shows wherever scrolling actually does something: the
-  // home section and the (scrollable) route page — but NOT the map, nor the
-  // all-routes window (that one pans/zooms, it doesn't scroll).
-  const hintActive = !!route || view === 'home'
+  // home section and the (scrollable) route page — but NOT the map, the
+  // all-routes window (that one pans/zooms), nor the opening pattern screen
+  // (there the action is to click the button, not scroll).
+  const hintActive = !idle && !showAll && (!!route || view === 'home')
 
   return (
     <HintProvider>

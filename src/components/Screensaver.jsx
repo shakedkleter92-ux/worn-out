@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { randomPulse } from '../lib/blink.js'
 import { ROUTES, mediaUrl } from '../data/routes.js'
+import { useSetHint } from './HintContext.jsx'
 
 /* ==================================================================
    SCREENSAVER / OPENING PATTERN
@@ -57,6 +58,10 @@ export default function Screensaver({ onExit }) {
   const canvasRef = useRef(null)
   const btnPulse = useRef(randomPulse())
   const dissolve = useRef(null) // { start } once the exit is triggered
+  const setHint = useSetHint() // cursor cue: "ENTER" while the button is hovered
+
+  // make sure the cue never lingers after the pattern goes away
+  useEffect(() => () => setHint(null), [setHint])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -249,7 +254,8 @@ export default function Screensaver({ onExit }) {
       >
         <div
           onClick={startExit}
-          title="enter"
+          onMouseEnter={() => setHint('ENTER')}
+          onMouseLeave={() => setHint(null)}
           style={{ width: 16, height: 16, cursor: 'pointer', animation: btnPulse.current }}
         />
       </div>

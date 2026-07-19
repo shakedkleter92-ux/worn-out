@@ -477,7 +477,7 @@ export default function Experience({ onSelectRoute, onOpenAll, onViewChange, res
                   onMouseEnter={() => {
                     if (uiLeaving) return
                     setHovered(n.id)
-                    setHint('ENTER ROUTE')
+                    setHint('ENTER')
                   }}
                   onMouseLeave={() => {
                     setHovered(null)
@@ -517,7 +517,7 @@ export default function Experience({ onSelectRoute, onOpenAll, onViewChange, res
                     onMouseEnter={() => {
                       if (uiLeaving) return
                       setHovered(n.id)
-                      setHint('ENTER ROUTE')
+                      setHint('ENTER')
                     }}
                     onMouseLeave={() => {
                       setHovered(null)

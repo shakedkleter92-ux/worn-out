@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ROUTES, HOME, routeLabel } from '../data/routes.js'
+import { ROUTES, HOME, routeLabel, mediaUrl } from '../data/routes.js'
 import ScrambleTo from './ScrambleTo.jsx'
 import RouteToggle from './RouteToggle.jsx'
 import HeaderButton from './HeaderButton.jsx'
@@ -68,12 +68,27 @@ export default function GlobalRoutes({ onBack }) {
   const [step, setStep] = useState(0)
   useEffect(() => {
     const timers = [
-      setTimeout(() => setStep(1), 1300), // back button
-      setTimeout(() => setStep(2), 1800), // line draws
-      setTimeout(() => setStep(3), 2500), // toggles
-      setTimeout(() => setStep(4), 3100) // strips begin
+      setTimeout(() => setStep(1), 350), // back button
+      setTimeout(() => setStep(2), 650), // line draws
+      setTimeout(() => setStep(3), 900), // toggles
+      setTimeout(() => setStep(4), 1100) // strips begin (was 3100 — far too late)
     ]
     return () => timers.forEach(clearTimeout)
+  }, [])
+
+  // warm the browser cache with every mapping up front, so as you pan/zoom the
+  // textures paint instantly instead of loading (and flashing blank) each time.
+  // Only MAPPING svgs (~50KB each) — the heavy TEXTURE photos stay lazy.
+  useEffect(() => {
+    const imgs = []
+    for (const r of ROUTES) {
+      for (let i = 1; i <= r.cells; i++) {
+        const img = new Image()
+        img.src = mediaUrl(r.folder, 'MAPPING', `M${i}.svg`)
+        imgs.push(img)
+      }
+    }
+    return () => imgs.forEach((im) => (im.src = ''))
   }, [])
 
   const frameRef = useRef(null)
@@ -250,6 +265,8 @@ export default function GlobalRoutes({ onBack }) {
             start={step >= 4}
             auto
             shimmer
+            cellDelay={40}
+            layerStagger={70}
             onHover={(i) => {
               setHovered(r.id)
               setHoverCell({ ri, ci: i - 1, folder: r.folder })
