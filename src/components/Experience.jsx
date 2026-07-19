@@ -65,7 +65,7 @@ const routeById = Object.fromEntries(ROUTES.map((r) => [r.id, r]))
 // dev shortcut: ?dev=map opens straight into the revealed map
 const DEV = new URLSearchParams(window.location.search).get('dev')
 
-export default function Experience({ onSelectRoute, onOpenAll, onViewChange, resumeMap = 0, paused = false }) {
+export default function Experience({ onSelectRoute, onOpenAll, onViewChange, resumeMap = 0, paused = false, autoIntro = false, onReturnToOpening }) {
   const setHint = useSetHint() // cursor cue text while hovering a map button
   // viewport-width scale (vertical scroll space)
   const [scale, setScale] = useState(1)
@@ -78,6 +78,27 @@ export default function Experience({ onSelectRoute, onOpenAll, onViewChange, res
 
   // intro build: idle -> h -> v -> ready
   const [phase, setPhase] = useState(DEV === 'map' || DEV === 'intro' ? 'ready' : 'idle')
+
+  // coming back from the opening/screensaver: once the pattern has dissolved
+  // away, the line + text open on their own (no scroll needed), then the user
+  // scrolls down to the routes — the order the user asked for.
+  useEffect(() => {
+    if (!autoIntro) return
+    const t = setTimeout(() => setPhase((p) => (p === 'idle' ? 'h' : p)), 450)
+    return () => clearTimeout(t)
+  }, [autoIntro])
+
+  // once the self-opening intro is fully built, hold the wheel shut for a
+  // moment so trackpad momentum can't drop straight to the map — the user
+  // gets to read, and the descent waits for a fresh, deliberate scroll.
+  useEffect(() => {
+    if (!autoIntro || phase !== 'ready') return
+    lock.current = true
+    const t = setTimeout(() => {
+      lock.current = false
+    }, 1000)
+    return () => clearTimeout(t)
+  }, [autoIntro, phase])
   const [homeHover, setHomeHover] = useState(false)
   const homePulse = useRef(randomPulse())
   const h1Pulse = useRef(randomPulse())
@@ -148,16 +169,19 @@ export default function Experience({ onSelectRoute, onOpenAll, onViewChange, res
       // -- intro (first square) opens forward, reverses back --
       if (phase === 'idle') {
         if (forward) setPhase('h') // build the intro
+        else if (back) onReturnToOpening?.() // keep scrolling up → back to the pattern screen
         return
       }
       if (phase !== 'ready') return // build/reverse in progress -> ignore
       if (back && view === 'home') {
-        // reverse the intro back to just the centre square. Wait long
-        // enough for the paragraph to fully erase (mirror of the reveal).
+        // reverse of clicking the button: the text erases (mirror of the
+        // reveal), then we land straight back on the opening pattern screen,
+        // where its squares materialise in. text -> pattern in one scroll.
         lock.current = true
         setPhase('closing')
         setTimeout(() => {
           setPhase('idle')
+          onReturnToOpening?.()
           lock.current = false
         }, PARA_MS + 200)
         return
@@ -188,7 +212,7 @@ export default function Experience({ onSelectRoute, onOpenAll, onViewChange, res
     }
     window.addEventListener('wheel', onWheel, { passive: true })
     return () => window.removeEventListener('wheel', onWheel)
-  }, [phase, view, roads, maxClose, paused, onOpenAll])
+  }, [phase, view, roads, maxClose, paused, onOpenAll, onReturnToOpening])
 
   // report the current section (home vs map) to the parent
   useEffect(() => {
@@ -197,13 +221,14 @@ export default function Experience({ onSelectRoute, onOpenAll, onViewChange, res
 
   // returning from a route / all-routes overlay: snap the map back to
   // section 2 with the roads already open (never to the home screen), and
-  // briefly lock the wheel so trackpad momentum can't navigate it away
-  const firstResume = useRef(true)
+  // briefly lock the wheel so trackpad momentum can't navigate it away.
+  // NB: compare the value rather than a "first run" flag — under StrictMode
+  // the mount effect fires twice, which would otherwise force the map open on
+  // a fresh remount (e.g. arriving from the opening pattern via autoIntro).
+  const lastResume = useRef(resumeMap)
   useEffect(() => {
-    if (firstResume.current) {
-      firstResume.current = false
-      return
-    }
+    if (resumeMap === lastResume.current) return // mount / no real change
+    lastResume.current = resumeMap
     setView('map')
     setPhase('ready')
     setRoads('open')
