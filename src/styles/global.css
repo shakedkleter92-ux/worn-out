@@ -3,22 +3,17 @@
    Minimal. Pure white. One accent. Desktop only.
    ============================================================ */
 
-/* --- Nitti font ---
-   Nitti is a commercial typeface (Bold Monday). Drop the licensed
-   files into /src/fonts/ as Nitti.woff2 / Nitti-Bold.woff2 and they
-   will be picked up automatically. Until then we fall back to a
-   monospace stack that keeps the same mono rhythm.                */
+/* --- typeface ---
+   SimplerPro Mono is SELF-HOSTED and shipped with the build, so the site
+   renders identically on every machine — Hebrew and Latin alike (this font
+   carries both). The path is relative on purpose: that lets Vite bundle the
+   file and rewrite the URL for the GitHub Pages base (/worn-out/). An
+   absolute /src/... path is NOT processed by the bundler and 404s in
+   production, which is what made the type fall back to system fonts.      */
 @font-face {
-  font-family: 'Nitti';
-  src: url('/src/fonts/Nitti.woff2') format('woff2');
+  font-family: 'SimplerPro Mono';
+  src: url('../fonts/SimplerProMono-Regular.woff2') format('woff2');
   font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Nitti';
-  src: url('/src/fonts/Nitti-Bold.woff2') format('woff2');
-  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
@@ -27,8 +22,9 @@
   --bg: #ffffff;
   --ink: #000000;
   --accent: #f05442;
-  --font: 'Nitti', 'Nitti Typewriter', 'SFMono-Regular', 'Menlo',
-    'Consolas', monospace;
+  /* no locally-installed faces in the stack — anything not shipped would
+     render differently from one computer to the next */
+  --font: 'SimplerPro Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
 }
 
 * {

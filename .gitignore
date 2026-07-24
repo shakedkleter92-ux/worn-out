@@ -10,3 +10,7 @@ dist
 # to >1GB each). The web-optimized *_web.mp4 versions live in public/media
 # and ARE committed.
 video_originals
+
+# original desktop font sources — only the .woff2 webfont is shipped
+src/fonts/*.otf
+src/fonts/*.ttf

@@ -51,7 +51,7 @@ const PAUSE_READY = 700 // ms pause before H1 appears
 const PAUSE_ROUTES = 900 // ms pause after roads draw, before labels appear
 
 const INTRO_TEXT =
-  'Erosion maps recurring routes of everyday relief through the worn ' +
+  'Wear maps recurring routes of everyday relief through the worn ' +
   'textures they leave behind. By documenting material that being ' +
   'transformed by repeated movement, the interface reveals how human ' +
   'routines become embedded in the environment over time.'
