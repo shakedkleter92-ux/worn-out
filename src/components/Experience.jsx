@@ -333,7 +333,7 @@ export default function Experience({ onSelectRoute, onOpenAll, onViewChange, res
             ))}
         </svg>
 
-        {/* ---------------- WORN OUT label ---------------- */}
+        {/* ---------------- WEAR label ---------------- */}
         {showLabel && (
           <div
             style={{
@@ -346,7 +346,7 @@ export default function Experience({ onSelectRoute, onOpenAll, onViewChange, res
               letterSpacing: '0.02em'
             }}
           >
-            <Typewriter text="WORN OUT" speed={115} leaving={introClosing} />
+            <Typewriter text="WEAR" speed={115} leaving={introClosing} />
           </div>
         )}
 
